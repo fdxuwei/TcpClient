@@ -190,7 +190,23 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Config.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\CppLog.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\HexStr.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\io_service_pool.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Markup.cpp"
 				>
 			</File>
 			<File
@@ -229,6 +245,10 @@
 				RelativePath=".\TcpClientDlg.cpp"
 				>
 			</File>
+			<File
+				RelativePath=".\zip.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Í·ÎÄ¼þ"
@@ -240,7 +260,23 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Config.h"
+				>
+			</File>
+			<File
+				RelativePath=".\CppLog.h"
+				>
+			</File>
+			<File
+				RelativePath=".\HexStr.h"
+				>
+			</File>
+			<File
 				RelativePath=".\io_service_pool.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Markup.h"
 				>
 			</File>
 			<File
@@ -269,6 +305,10 @@
 			</File>
 			<File
 				RelativePath=".\TcpClientDlg.h"
+				>
+			</File>
+			<File
+				RelativePath=".\zip.h"
 				>
 			</File>
 		</Filter>

@@ -6,6 +6,8 @@
 #include "TcpClientDlg.h"
 #include <winsock2.h>
 #include "client_pool.h"
+#include "Config.h"
+#include "HexStr.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -58,7 +60,6 @@ CTcpClientDlg::CTcpClientDlg(CWnd* pParent /*=NULL*/)
 	, m_uServPort(8888)
 	, m_nClientNum(100)
 	, m_nThreadNum(1)
-	, m_nMsgSize(100)
 	, m_nSendCycle(1000)
 	, m_nSendBytes(0)
 	, m_nRecvBytes(0)
@@ -66,8 +67,16 @@ CTcpClientDlg::CTcpClientDlg(CWnd* pParent /*=NULL*/)
 	, m_nSendRecvDelay(0)
 	, m_nErrCount(0)
 	, m_csConnStatus(_T(""))
+	, m_csSendMsg(_T(""))
+	, m_csRecvMsg(_T(""))
+	, m_nSendMsgSize(0)
+	, m_nRecvMsgSize(0)
+	, m_bHexSend(FALSE)
+	, m_bHexRecv(FALSE)
+	, m_bNoShowRecv(FALSE)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	LoadConfig();
 }
 
 void CTcpClientDlg::DoDataExchange(CDataExchange* pDX)
@@ -78,7 +87,6 @@ void CTcpClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_EDIT_SERVPORT, m_uServPort);
 	DDX_Text(pDX, IDC_EDIT_CLIENTNUM, m_nClientNum);
 	DDX_Text(pDX, IDC_EDIT_THREADNUM, m_nThreadNum);
-	DDX_Text(pDX, IDC_EDIT_MSGSIZE, m_nMsgSize);
 	DDX_Text(pDX, IDC_EDIT_SEND_CYCLE, m_nSendCycle);
 	DDX_Control(pDX, IDC_BUTTON_START, m_StartButton);
 	DDX_Control(pDX, IDC_BUTTON_STOP, m_StopButton);
@@ -88,6 +96,13 @@ void CTcpClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_STATIC_SEND_RECV_DELAY, m_nSendRecvDelay);
 	DDX_Text(pDX, IDC_STATIC_ERRNUM, m_nErrCount);
 	DDX_Text(pDX, IDC_STATIC_CONN_STATE, m_csConnStatus);
+	DDX_Text(pDX, IDC_EDIT_SENDMSG, m_csSendMsg);
+	DDX_Text(pDX, IDC_EDIT_RECVMSG, m_csRecvMsg);
+	DDX_Text(pDX, IDC_STATIC_SENDMSGSIZE, m_nSendMsgSize);
+	DDX_Text(pDX, IDC_STATIC_RECVMSGSIZE, m_nRecvMsgSize);
+	DDX_Check(pDX, IDC_CHECK_HEX_SEND, m_bHexSend);
+	DDX_Check(pDX, IDC_CHECK_HEX_RECV, m_bHexRecv);
+	DDX_Check(pDX, IDC_CHECK_NOSHOWRECV, m_bNoShowRecv);
 }
 
 BEGIN_MESSAGE_MAP(CTcpClientDlg, CDialog)
@@ -98,6 +113,9 @@ BEGIN_MESSAGE_MAP(CTcpClientDlg, CDialog)
 	ON_BN_CLICKED(IDC_BUTTON_START, &CTcpClientDlg::OnBnClickedButtonStart)
 	ON_BN_CLICKED(IDC_BUTTON_STOP, &CTcpClientDlg::OnBnClickedButtonStop)
 	ON_WM_TIMER()
+	ON_EN_CHANGE(IDC_EDIT_SENDMSG, &CTcpClientDlg::OnEnChangeEditSendmsg)
+	ON_WM_DESTROY()
+	ON_BN_CLICKED(IDC_CHECK_HEX_SEND, &CTcpClientDlg::OnBnClickedCheckHexSend)
 END_MESSAGE_MAP()
 
 
@@ -191,28 +209,30 @@ void CTcpClientDlg::OnBnClickedButtonStart()
 	UpdateData(TRUE);
 	if(!CheckInput())
 		return;
+	
+	KillTimer(TIMER_STATICS);
 
+	SaveConfig();
+	InitData();
 	//
-	m_csSendMsg = CString('a', m_nMsgSize);
-	//
-	m_clpp.reset(new client_pool(m_nClientNum, (LPCTSTR)m_csServIP, m_uServPort, m_nThreadNum, m_nMsgSize));
+	m_clpp.reset(new client_pool(m_nClientNum, (LPCTSTR)m_csServIP, m_uServPort, m_nThreadNum));
 	m_clpp->start();
 	SetTimer(TIMER_SEND, m_nSendCycle, NULL);
 	SetTimer(TIMER_STATICS, 1000, NULL);
 	m_StartButton.EnableWindow(FALSE);
 	m_StopButton.EnableWindow(TRUE);
+	DisableControls();
 }
 
 void CTcpClientDlg::OnBnClickedButtonStop()
 {
 	// TODO: 在此添加控件通知处理程序代码
 	KillTimer(TIMER_SEND);
-	KillTimer(TIMER_STATICS);
 	m_clpp->stop();
-	m_clpp.reset();
 	m_StartButton.EnableWindow(TRUE);
 	m_StopButton.EnableWindow(FALSE);
-}
+	EnableControls();
+}	
 
 
 BOOL CTcpClientDlg::CheckInput()
@@ -237,11 +257,13 @@ BOOL CTcpClientDlg::CheckInput()
 		AfxMessageBox(_T("发送周期必须大于0"));
 		return FALSE;
 	}
-	if(m_nMsgSize < 1)
+
+	if(m_bHexSend && !CHexStr::IsValidHexStr(m_csSendMsg))
 	{
-		AfxMessageBox(_T("数据包大小必须大于0"));
+		AfxMessageBox(_T("不正确的十六进制数据"));
 		return FALSE;
 	}
+
 	return TRUE;
 }
 
@@ -251,7 +273,8 @@ void CTcpClientDlg::OnTimer(UINT_PTR nIDEvent)
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 	if(TIMER_SEND == nIDEvent)
 	{
-
+		if(m_nSendBufSize > 0)
+			m_clpp->send(m_saSendBuf.get(), m_nSendBufSize);
 	}
 	else if(TIMER_STATICS == nIDEvent)
 	{
@@ -262,12 +285,162 @@ void CTcpClientDlg::OnTimer(UINT_PTR nIDEvent)
 
 void CTcpClientDlg::UpdateStatics()
 {
+	CString csText;
 	m_nSendBytes = m_clpp->get_writebytes();
 	m_nRecvBytes = m_clpp->get_readbytes();
 	m_nErrCount = m_clpp->get_errnum();
 	m_nSendRecvDelay = m_clpp->get_sendrecvdelay();
 	m_nConnDelay = m_clpp->get_conndelay();
 	m_csConnStatus.Format(_T("%d/%d"), m_clpp->get_connoknum(), m_nClientNum);
+	
+	csText.Format(_T("%d"), m_nSendBytes);
+	GetDlgItem(IDC_STATIC_SEND_BYTES)->SetWindowText(csText);
+	csText.Format(_T("%d"), m_nRecvBytes);
+	GetDlgItem(IDC_STATIC_RECV_BYTES)->SetWindowText(csText);
+	csText.Format(_T("%d"), m_nErrCount);
+	GetDlgItem(IDC_STATIC_ERRNUM)->SetWindowText(csText);
+	csText.Format(_T("%d"), m_nSendRecvDelay);
+	GetDlgItem(IDC_STATIC_SEND_RECV_DELAY)->SetWindowText(csText);
+	csText.Format(_T("%d"), m_nConnDelay);
+	GetDlgItem(IDC_STATIC_CONNECT_DELAY)->SetWindowText(csText);
+	GetDlgItem(IDC_STATIC_CONN_STATE)->SetWindowText(m_csConnStatus);
+}
 
-	UpdateData(FALSE);
+void CTcpClientDlg::InitData()
+{
+	m_nSendBytes = 0;
+	m_nRecvBytes = 0;
+	m_nConnDelay = 0;
+	m_nSendRecvDelay = 0;
+	m_nErrCount = 0;
+	m_csConnStatus = _T("");
+	
+	if(m_bHexSend)
+	{
+		m_nSendBufSize = CHexStr::CalBufferSize(m_csSendMsg);
+		if(m_nSendBufSize > 0)
+		{
+			m_saSendBuf.reset(new char[m_nSendBufSize]);
+			CHexStr::StrToBuffer(m_csSendMsg, m_saSendBuf.get(), m_nSendBufSize);
+		}
+	}
+	else
+	{
+		m_nSendBufSize = m_csSendMsg.GetLength();
+		if(m_nSendBufSize > 0)
+		{
+			m_saSendBuf.reset(new char[m_nSendBufSize]);
+			memcpy(m_saSendBuf.get(), (LPCTSTR)m_csSendMsg, m_nSendBufSize);
+		}
+	}
+
+	if(!NeedShowRecv())
+		GetDlgItem(IDC_EDIT_RECVMSG)->SetWindowText(_T("当客户端数目大于1或者发送周期小于1000毫秒时，不显示接收数据。"));
+}
+
+void CTcpClientDlg::LoadConfig()
+{
+	CConfig::Instance().Load();
+	m_csServIP = CConfig::Instance().GetServIP();
+	m_uServPort = CConfig::Instance().GetServPort();
+	m_nClientNum = CConfig::Instance().GetClientNum();
+	m_nThreadNum = CConfig::Instance().GetThreadNum();
+	m_nSendCycle = CConfig::Instance().GetSendCycle();
+}
+
+void CTcpClientDlg::SaveConfig()
+{
+	 CConfig::Instance().SetServIP(m_csServIP);
+	 CConfig::Instance().SetServPort(m_uServPort);
+	 CConfig::Instance().SetClientNum(m_nClientNum);
+	 CConfig::Instance().SetThreadNum(m_nThreadNum);
+	 CConfig::Instance().SetSendCycle(m_nSendCycle);
+	 CConfig::Instance().Save();
+}
+
+void CTcpClientDlg::OnEnChangeEditSendmsg()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，则它将不会
+	// 发送该通知，除非重写 CDialog::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+
+	CString csSize;
+	GetDlgItem(IDC_EDIT_SENDMSG)->GetWindowText(m_csSendMsg);
+	if(m_bHexSend)
+		csSize.Format(_T("%d"), m_csSendMsg.GetLength()/2);
+	else
+		csSize.Format(_T("%d"), m_csSendMsg.GetLength());
+	GetDlgItem(IDC_STATIC_SENDMSGSIZE)->SetWindowText(csSize);
+}
+
+void CTcpClientDlg::ShowRecvData(const void *pData, int nSize)
+{
+	CString csText;
+	if(!m_bHexRecv)
+	{
+		char *pc = new char[nSize+1];
+		memcpy(pc, pData, nSize);
+		pc[nSize] = 0;
+		csText = pc;
+		delete []pc;
+	}
+	else
+	{
+		csText = CHexStr::BufferToStr(pData, nSize);
+	}
+	GetDlgItem(IDC_EDIT_RECVMSG)->SetWindowText(csText);
+	csText.Format(_T("%d"), nSize);
+	GetDlgItem(IDC_STATIC_RECVMSGSIZE)->SetWindowText(csText);
+}
+
+BOOL CTcpClientDlg::NeedShowRecv()
+{
+	return (m_nClientNum == 1 && m_nSendCycle >= 1000);
+}
+void CTcpClientDlg::OnDestroy()
+{
+	CDialog::OnDestroy();
+
+	// TODO: 在此处添加消息处理程序代码
+	KillTimer(TIMER_SEND);
+	KillTimer(TIMER_STATICS);
+	if(m_clpp)
+	{
+		m_clpp->stop();
+		m_clpp.reset();
+	}
+}
+
+void CTcpClientDlg::OnBnClickedCheckHexSend()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	m_bHexSend = ((CButton*)GetDlgItem(IDC_CHECK_HEX_SEND))->GetCheck();
+	OnEnChangeEditSendmsg();
+}
+
+void CTcpClientDlg::EnableControls()
+{
+	GetDlgItem(IDC_EDIT_SERVIP)->EnableWindow(TRUE);
+	GetDlgItem(IDC_EDIT_SERVPORT)->EnableWindow(TRUE);
+	GetDlgItem(IDC_EDIT_THREADNUM)->EnableWindow(TRUE);
+	GetDlgItem(IDC_EDIT_CLIENTNUM)->EnableWindow(TRUE);
+	GetDlgItem(IDC_EDIT_SEND_CYCLE)->EnableWindow(TRUE);
+	GetDlgItem(IDC_CHECK_HEX_SEND)->EnableWindow(TRUE);
+	GetDlgItem(IDC_CHECK_HEX_RECV)->EnableWindow(TRUE);
+	GetDlgItem(IDC_BUTTON_START)->EnableWindow(TRUE);
+}
+
+void CTcpClientDlg::DisableControls()
+{
+	GetDlgItem(IDC_EDIT_SERVIP)->EnableWindow(FALSE);
+	GetDlgItem(IDC_EDIT_SERVPORT)->EnableWindow(FALSE);
+	GetDlgItem(IDC_EDIT_THREADNUM)->EnableWindow(FALSE);
+	GetDlgItem(IDC_EDIT_CLIENTNUM)->EnableWindow(FALSE);
+	GetDlgItem(IDC_EDIT_SEND_CYCLE)->EnableWindow(FALSE);
+	GetDlgItem(IDC_CHECK_HEX_SEND)->EnableWindow(FALSE);
+	GetDlgItem(IDC_CHECK_HEX_RECV)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON_START)->EnableWindow(FALSE);
 }

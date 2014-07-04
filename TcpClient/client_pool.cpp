@@ -3,12 +3,12 @@
 
 using namespace std;
 
-client_pool::client_pool(int clinum, const std::string &servip, unsigned servport, int threadnum, int msgsize)
+client_pool::client_pool(int clinum, const std::string &servip, unsigned servport, int threadnum)
 	: m_isp(threadnum)
 {
 	for(int i = 0; i < clinum; ++i)
 	{
-		m_clients.push_back(tcp_client_ptr(new tcp_client(m_isp.get_io_service(), servip, servport, msgsize)));
+		m_clients.push_back(tcp_client_ptr(new tcp_client(m_isp.get_io_service(), servip, servport)));
 	}
 }
 
@@ -22,9 +22,21 @@ void client_pool::start()
 	m_threadp.reset(new boost::thread(boost::bind(&io_service_pool::run, &m_isp)));
 }
 
+void client_pool::send(const void *data, size_t size)
+{
+	for(std::list<tcp_client_ptr>::iterator it = m_clients.begin(); it != m_clients.end(); ++it)
+	{
+		(*it)->send(data, size);
+	}
+}
+
 void client_pool::stop()
 {
 	m_isp.stop();
+	for(std::list<tcp_client_ptr>::iterator it = m_clients.begin(); it != m_clients.end(); ++it)
+	{
+		(*it)->close();
+	}
 }
 
 client_pool::~client_pool(void)

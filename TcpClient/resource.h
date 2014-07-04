@@ -23,6 +23,14 @@
 #define IDC_STATIC_ERRNUM               1012
 #define IDC_STATIC_SEND_RECV_DELAY2     1013
 #define IDC_STATIC_CONN_STATE           1013
+#define IDC_EDIT_SENDMSG                1014
+#define IDC_CHECK_HEX_SEND              1015
+#define IDC_EDIT_RECVMSG                1016
+#define IDC_CHECK_HEX_RECV              1017
+#define IDC_CHECK3                      1018
+#define IDC_CHECK_NOSHOWRECV            1018
+#define IDC_STATIC_SENDMSGSIZE          1019
+#define IDC_STATIC_RECVMSGSIZE          1020
 #define ID_32771                        32771
 
 // Next default values for new objects
@@ -31,7 +39,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        130
 #define _APS_NEXT_COMMAND_VALUE         32772
-#define _APS_NEXT_CONTROL_VALUE         1014
+#define _APS_NEXT_CONTROL_VALUE         1021
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

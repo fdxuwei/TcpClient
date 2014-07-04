@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "TcpClient.h" 
 #include "TcpClientDlg.h"
+#include "CppLog.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -57,7 +58,12 @@ BOOL CTcpClientApp::InitInstance()
 	// TODO: 应适当修改该字符串，
 	// 例如修改为公司或组织名
 	SetRegistryKey(_T("应用程序向导生成的本地应用程序"));
-
+	// 初始化日志
+	CppLog::QueuedFileAppenderPtr fap = CppLog::QueuedFileAppender::Create();
+	fap->SetPrefixName(_T("TcpClient"));
+	fap->SetDir("./"); // in fact the default path is "./", but if remove this line, the process will crupt while exiting. it's a strange bug!
+	CppLog::Log::Instance().AddAppender(fap);
+	//
 	CTcpClientDlg dlg;
 	m_pMainWnd = &dlg;
 	INT_PTR nResponse = dlg.DoModal();

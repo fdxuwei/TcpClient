@@ -9,10 +9,11 @@
 class client_pool
 {
 public:
-	client_pool(int clinum, const std::string &servip, unsigned servport, int threadnum, int msgsize);
+	client_pool(int clinum, const std::string &servip, unsigned servport, int threadnum);
 	~client_pool(void);
 	void start(); 
 	void stop();
+	void send(const void *data, size_t size);
 	// statics
 	int get_connoknum();
 	int get_errnum();
