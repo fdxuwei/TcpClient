@@ -8,13 +8,16 @@
 
 using namespace boost::asio;
 
+const static long kMinRecConnTime = 5; // second
+const static long kMaxRecConnTime = 60; // second
+
 tcp_client::tcp_client(io_service &ios, const std::string &servip, unsigned servport)
 	: m_ios (ios)
 	, m_sock (ios)
 	, m_servip (servip)
 	, m_servport (servport)
 	, m_rctimer (ios)
-	, m_reconn_time (2)
+	, m_reconn_time (kMinRecConnTime)
 {
 }
 
@@ -36,7 +39,7 @@ void tcp_client::connect_handler(const boost::system::error_code &ec)
 	else
 	{
 		m_connected = true;
-		m_reconn_time = 2;
+		m_reconn_time = kMinRecConnTime;
 		//
 		boost::chrono::milliseconds dur = boost::chrono::duration_cast<boost::chrono::milliseconds>(boost::chrono::system_clock::now() - m_starttime);
 		m_conndelay = dur.count();
@@ -127,7 +130,8 @@ void tcp_client::reconnect()
 		return;
 	}
 	m_rctimer.async_wait(boost::bind(&tcp_client::reconnect_handler, this, _1));
-	m_reconn_time *= 2;
+	if(m_reconn_time < kMaxRecConnTime)
+		m_reconn_time *= 2;
 }
 
 tcp_client::~tcp_client(void)

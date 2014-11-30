@@ -30,12 +30,12 @@ namespace CppLog
 	// log level
 	enum LOG_LEVEL
 	{
+		LOG_LEVEL_ALL,
 		LOG_LEVEL_DEBUG,
 		LOG_LEVEL_INFO,
 		LOG_LEVEL_WARN,
 		LOG_LEVEL_ERROR,
-		LOG_LEVEL_FATAL,
-		LOG_LEVEL_ALL
+		LOG_LEVEL_FATAL
 	};
 	// class Log 
 	class Log
@@ -167,7 +167,7 @@ namespace CppLog
 #define LOG_CMD(log,event,level) \
 	{\
 		boost::lock_guard<CppLog::LogMutex> lock(log.GetMutex());\
-		if(log.GetLogLevel() >= level)\
+		if(log.GetLogLevel() <= level)\
 			for(CppLog::AppenderList::iterator it = log.GetAppenderList().begin(); it != log.GetAppenderList().end(); ++it)\
 			{\
 				std::stringstream ssTemp;\
